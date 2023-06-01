@@ -1,6 +1,4 @@
-import java.util.ArrayList;
 import java.util.Random;
-import java.util.Scanner;
 
 /*
 Postępująca komplikacja zad. 4. Założyć, że:
@@ -31,8 +29,11 @@ Wnioski?
 
 Zakres materiału: jak w zad 3.
  */
+
 public class Main
 {
+    public static int deltaT = 30;
+    public static double e = 0.5f;
     static Random random;
     public static int[] generateRequests(int numberOfPages, int n, int localMaxSize, double localProbability)
     {
@@ -43,7 +44,7 @@ public class Main
             boolean local = i != 0 && random.nextFloat() < localProbability;
             if (local)
             {
-                int localRequest = requests[i - 1] + random.nextInt(-localMaxSize, localMaxSize);
+                int localRequest = requests[i - 1] + random.nextInt(-localMaxSize, localMaxSize + 1);
                 requests[i] = Math.min(numberOfPages - 1, Math.max(0, localRequest));
             }
             else
@@ -69,46 +70,44 @@ public class Main
     {
         random = new Random();
 
-        int numberOfPages = 50;
+        // SO3
+        int frameSize = 50;
+        int pagesAmountPerProcessLowerBound = 20;
+        int pagesAmountPerProcessUpperBound = 100;
+        int requestsAmountPerProcess = 1000;
+        int localSize = 1;
+        double localProbability = 0.99;
 
-        int[] frameSizes = { 3, 5, 10 };
+        int processesAmount = 10;
+        Process[] processes = new Process[processesAmount];
 
-        int n = 1000;
+        int totalAmountOfPages = 0;
 
-        Page[] pages = GeneratePages(numberOfPages);
-
-        int localSize = 2;
-
-        double localProbability = 0.95;
-
-        int[] requests = generateRequests(numberOfPages, n, localSize, localProbability);
-
-        boolean testSequence = false;
-        if (testSequence)
+        for (int processID = 0; processID < processesAmount; processID++)
         {
-            requests = new int[] { 0, 1, 2, 3, 0, 1, 4, 0, 1, 2, 3, 4 };
-            pages = new Page[] { new Page(0), new Page(1),new Page(2),new Page(3),new Page(4)};
-            frameSizes = new int[] { 4 };
+            //int numberOfPages = random.nextInt(pagesAmountPerProcessLowerBound, pagesAmountPerProcessUpperBound);
+            int numberOfPages = (int) (pagesAmountPerProcessLowerBound + random.nextFloat(0, 1) * random.nextFloat(0, 1) * (pagesAmountPerProcessUpperBound - pagesAmountPerProcessLowerBound));
+            totalAmountOfPages += numberOfPages;
+
+            int[] requests = generateRequests(numberOfPages, requestsAmountPerProcess, localSize, localProbability);
+
+            Page[] pages = GeneratePages(numberOfPages);
+
+            processes[processID] = new Process(processID, requests, pages);
         }
 
-        for (int curFrameSize : frameSizes)
+        FrameAllocator[] allocators = new FrameAllocator[]
         {
-            System.out.println("Current frame size: " + curFrameSize);
+                new AllocatorEqual(frameSize, processesAmount, totalAmountOfPages),
+                new AllocatorProportional(frameSize, processesAmount, totalAmountOfPages),
+                new AllocatorByError(frameSize, processesAmount, totalAmountOfPages, 10, 20, 25, deltaT),
+                new AllocatorZonal(frameSize, processesAmount, totalAmountOfPages, deltaT * 2/3, deltaT),
+        };
 
-            int fifoErrors = FIFO.run(pages, curFrameSize, requests);
-            System.out.println("FIFO errors: " + fifoErrors);
-
-            int optErrors = OPT.run(pages, curFrameSize, requests);
-            System.out.println("OPT errors: " + optErrors);
-
-            int lruErrors = LRU.run(pages, curFrameSize, requests);
-            System.out.println("LRU errors: " + lruErrors);
-
-            int alruErrors = ALRU.run(pages, curFrameSize, requests);
-            System.out.println("ALRU errors: " + alruErrors);
-
-            int rndErrors = RND.run(pages, curFrameSize, requests);
-            System.out.println("RAND errors: " + rndErrors);
+        for (FrameAllocator allocator : allocators)
+        {
+            System.out.println("\n" + allocator);
+            allocator.RunProcesses(requestsAmountPerProcess, processes);
         }
     }
 }
